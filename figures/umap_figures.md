@@ -4,8 +4,129 @@ Blake Bowen
 30/05/2022
 
 ``` r
-pcpg_rna <- readRDS("Data/pcpg_with_metadata_and_qc.RDS")
+# umap plotting functions
+
+square.ratio <- function(x){
+  range2 <- function(x){sum(c(-1,1)*range(x, na.rm=T))}
+  return(coord_fixed(clip="off", ratio = range2(x[,1])/range2(x[,2])))
+}
+
+getPlotData <- function(seuratobj,
+                        gene_list=NULL,
+                        reduction='umap'){
+  # get dimreduction embeddings for specified reduction
+  embeddings.df <- Embeddings(seuratobj, reduction = reduction) %>%
+    data.frame() %>% 
+    bind_cols(seuratobj@meta.data) %>%
+    dplyr::rename("UMAP 1" = 1,
+                  "UMAP 2" = 2)
+  # get gene expression for any genes specified
+  if(!is.null(gene_list)){
+    gene_data <- FetchData(seuratobj, gene_list, slot = "data")
+    embeddings.df <- embeddings.df %>%
+      bind_cols(gene_data)}
+  
+  embeddings.df <- embeddings.df %>% 
+    filter(!is.na(`UMAP 1`) & !is.na(`UMAP 2`))
+  return(embeddings.df)
+}
+
+ggUMAPplot <- function(data,
+                       group.by, # color by this metadata column
+                       colorpal="auto",
+                       plot.title=NULL,
+                       size=0.14,
+                       stroke=0,
+                       shape=19){
+  
+  data = arrange(data, group.by) 
+  umap.ratio <- square.ratio(data[,c("UMAP 1", "UMAP 2")])
+  
+  new.plot = ggplot(data) +
+    geom_point(
+      mapping = aes(x = .data[["UMAP 1"]], y = .data[["UMAP 2"]], colour = .data[[group.by]]),
+      size = size, stroke = stroke, shape = shape)+ 
+    
+    umap.ratio+
+    theme_bw()+
+    theme(legend.position="bottom",
+          legend.title= element_blank(),
+          legend.text.align = 0,
+          legend.key.size = unit(5, "mm"),
+          panel.grid.minor = element_blank(),
+          panel.grid.major = element_blank(),
+          axis.ticks=element_blank(),
+          axis.text = element_blank())+
+    guides(color = guide_legend(override.aes = list(size=4, shape=15)))
+  
+  if(length(colorpal) > 1 ){
+    new.plot = new.plot +
+      scale_color_manual(values = colorpal, drop=T)
+  }
+  if (!is.null(plot.title)) {
+    new.plot = new.plot +
+      labs(title = plot.title)
+  }else{
+    new.plot = new.plot +
+      labs(title = group.by)
+  }
+  return(new.plot)
+}
+
+ggFeaturePlot <- function(data,
+                          gene,
+                          size=0.14,
+                          stroke=0,
+                          shape=19){
+  data = arrange(data, gene) # plot the lowest expressing cells first and highest expression last
+  umap.ratio <- square.ratio(data[,c("UMAP 1", "UMAP 2")])
+  new.plot = ggplot(data) +
+    geom_point(
+      mapping = aes(x = .data[["UMAP 1"]], y = .data[["UMAP 2"]], colour = .data[[gene]]),
+      size = size, stroke = stroke, shape = shape)+ 
+    labs(title = gene)+
+    umap.ratio+
+    theme_bw()+
+    theme(legend.position="bottom",
+          legend.text.align = 0,
+          legend.key.size = unit(5, "mm"),
+          panel.grid.minor = element_blank(),
+          panel.grid.major = element_blank(),
+          plot.title = element_blank(),
+          axis.ticks=element_blank(),
+          axis.text = element_blank())+
+    scale_color_gradientn(colours = c("lightgrey", "red"))
+  return(new.plot)
+}
+```
+
+``` r
+pcpg_rna <- readRDS("Data/pcpg_with_metadata_and_qc.RDS") # from snRNA_add_and_format_metadata.R
 pcpg_rna$cell_subtype <- recode(pcpg_rna$cell_subtype, "Sustentacular cells" = "SCLCs")
+```
+
+# Figure 1
+
+``` r
+###########
+# FIGURE 1
+###########
+
+# Panel H: C1 and C2 UMAP
+
+c1c2_cols <- c("C1" = "red", "C2" = "blue", "Normal" = "lightgrey")
+
+pcpg_rna_table <- getPlotData(pcpg_rna)
+
+c1c2_umap <- ggUMAPplot(data = pcpg_rna_table, group.by = "pseudohypoxic_or_kinase_signalling", colorpal = c1c2_cols)
+
+c1c2_umap
+```
+
+![](umap_figures_files/figure-gfm/figure-1-1.png)<!-- -->
+
+``` r
+# NOTE: other figure1 UMAPS in "Figures.R"
 ```
 
 # Figure 3
@@ -96,8 +217,6 @@ ggsave(plot = myeloid_umap,
 
 # PANEL D: ----
 
-# TODO: finish this plot when magnus provides the UMAP coordinates
-
 lymphoid_umap_table <- getPlotData(pcpg_rna, reduction = "Lymphoid.cells")
 
 lymphoid_umap <- ggUMAPplot(lymphoid_umap_table,
@@ -119,30 +238,6 @@ ggsave(plot = lymphoid_umap,
 ggsave(plot = lymphoid_umap,
        width = 150, height = 100, units = "mm",
        filename = "Figures/lymphoid_umap.pdf")
-```
-
-# Figure 1
-
-``` r
-###########
-# FIGURE 1
-###########
-
-# Panel H: C1 and C2 UMAP
-
-c1c2_cols <- c("C1" = "red", "C2" = "blue", "Normal" = "lightgrey")
-
-pcpg_rna_table <- getPlotData(pcpg_rna)
-
-c1c2_umap <- ggUMAPplot(data = pcpg_rna_table, group.by = "pseudohypoxic_or_kinase_signalling", colorpal = c1c2_cols)
-
-c1c2_umap
-```
-
-![](umap_figures_files/figure-gfm/figure-1-1.png)<!-- -->
-
-``` r
-#NOTE:  other figure1 UMAPS in "Figures.R"
 ```
 
 # Supplementary Figure UMAPs
@@ -169,15 +264,13 @@ metadata_of_interest <- c(
   "Patient",
   "pseudohypoxic_or_kinase_signalling",
   "tumor_subtype",
-  "phase") # TODO: add in annotation columns for individual genotype true or false for tumor only
+  "phase") 
 
 
 # FIGURE SX --------------------------------------------------------
 # panel A: batch UMAP
 # panel B: Normal Chromaffin cells colored by sample UMAP
 # panel C: PGL1 and PGL3 tumor cells colored by sample
-
-# TODO make UMAPs where all cells greyed out except a single genotype, color by sample 
 
 # make table with metadata, UMAP coords and normalised, scaled gene expression
 pcpg_rna_table <- getPlotData(pcpg_rna, genes_of_interest)
