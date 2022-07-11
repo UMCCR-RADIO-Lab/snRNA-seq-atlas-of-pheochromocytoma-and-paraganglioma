@@ -95,46 +95,6 @@ dim(counts_mat)
 dim(bulk_metadata)
 ```
 
-First, perform MDS dimensional reduction to see what the main sources of
-variation are within the dataset.
-
-``` r
-mds <- plotMDS(counts_mat, plot = FALSE)
-
-mds_tbl <- tibble(leading_logFC_dim1 = mds$x,
-                  leading_logFC_dim2 = mds$y,
-                  Sample_raw=colnames(mds$distance.matrix),
-                  Dim = "1+2") %>%
-  left_join(bulk_metadata)
-```
-
-    ## Joining, by = "Sample_raw"
-
-``` r
-# Plot some possible and expected sources of variation
-mds_ggplot <- ggplot(data = mds_tbl, aes(x = leading_logFC_dim1, y = leading_logFC_dim2))
-
-mds1 <- mds_ggplot +
-  geom_point(aes(colour = Batch))
-
-mds2 <- mds_ggplot +
-  geom_point(aes(colour = Genotype))
-
-mds3 <- mds_ggplot +
-  geom_point(aes(colour = tumor_subtype))
-
-mds4 <- mds_ggplot +
-  geom_point(aes(colour = Malignancy))
-
-mds1 + mds2 + mds3 + mds4
-```
-
-![](bulk_dge_malignant_vs_benign_files/figure-gfm/mds-plot-1.png)<!-- -->
-
-The MDS plots show that tumor samples primarily cluster by batch
-although they also cluster by tumor\_subtype and malignancy within each
-batch.
-
 ``` r
 # use Magnus's function to account for the partial NA coefficients
 compare.groups = function(fit, groups1, groups2, trend=FALSE){
@@ -324,27 +284,13 @@ tt_all_genes_SDHx <- compare.groups(fit.subtypes,
                groups1 = c("Malignant_C1A1_SDHx", "Malignant_C1A2_SDHx_HN"),
                groups2 = c("NonMalignant_C1A1_SDHx", "NonMalignant_C1A2_SDHx_HN"))
 
-ggVolcanoPlot(tt_all_genes_SDHx)
-```
-
-    ## [1] -5.202099  5.202099
-
-![](bulk_dge_malignant_vs_benign_files/figure-gfm/dge-compare-malignant-and-nonmalignant-1.png)<!-- -->
-
-``` r
 # compare malignant vs nonmalignant in all the non-SDHx tumors
 tt_all_genes_not_SDHx <- compare.groups(
   fit.subtypes,
   # compare all subtypes other than SDHx
   groups1 = c("Malignant_C1B1_VHL", "Malignant_C2A_Kinase", "Malignant_C2B1_MAX", "Malignant_C2B2_MAML3"),
   groups2 = c("NonMalignant_C1B1_VHL", "NonMalignant_C1B2_EPAS1", "NonMalignant_C2A_Kinase", "NonMalignant_C2B1_MAX", "NonMalignant_C2B2_MAML3"))
-
-ggVolcanoPlot(tt_all_genes_not_SDHx)
 ```
-
-    ## [1] -6.245274  6.245274
-
-![](bulk_dge_malignant_vs_benign_files/figure-gfm/dge-compare-malignant-and-nonmalignant-2.png)<!-- -->
 
 ``` r
 # look at: https://github.com/csoneson/ARMOR/blob/master/scripts/edgeR_dge.Rmd 
@@ -592,13 +538,23 @@ Differentially expressed cell type-specific gene sets (SDHx malignant vs
 SDHx nonmalignant)
 
 ``` r
-# pseudobulk_dge_for_supp <- pseudobulk_dge %>% 
-#   rename("cell_type" = Contrast) %>% 
-#   select(-AveExpr, -P.Value, -t, -B)
-# table(pseudobulk_dge_for_supp$cell_type)
-# 
-# pseudobulk_dge_for_supp %>%
-#   write_tsv("Results/Supplementary Table_X (normal cell type gene signatures)")
+pseudobulk_dge_for_supp <- pseudobulk_dge %>%
+  rename("cell_type" = Contrast) %>%
+  select(-AveExpr, -P.Value, -t, -B)
+table(pseudobulk_dge_for_supp$cell_type)
+```
+
+    ## 
+    ## Adrenocortical_cells              B_cells     Chromaffin_cells 
+    ##                  218                  275                  362 
+    ##    Endothelial_cells          Fibroblasts                SCLCs 
+    ##                  398                  266                  312 
+    ##           T_NK_cells 
+    ##                  370
+
+``` r
+pseudobulk_dge_for_supp %>%
+  write_tsv("Results/Supplementary Table_X (normal cell type gene signatures)")
 ```
 
 ``` r
@@ -698,9 +654,6 @@ dge_res_table <- dge_res_table %>%
     grepl("ZETHOVEN_T_NK_cells|HALLMARK_IL2_STAT5_SIGNALING", Genesets) ~ "T cells",
     grepl("ZETHOVEN_Fibroblasts", Genesets) ~ "Fibroblasts",
     grepl("ZETHOVEN_Endothelial_cells", Genesets) ~ "Endothelial cells",
-    # grepl("EPITHELIAL_MESENCHYMAL_TRANSITION", Genesets) ~ "EMT",
-    # grepl("HALLMARK_KRAS_SIGNALING_UP|HALLMARK_KRAS_SIGNALING_DN", Genesets) ~ "KRAS signalling",
-    # grepl("HALLMARK_APOPTOSIS", Genesets) ~ "Apoptosis",
     grepl("hromaffin", Genesets) ~ "Chromaffin cells",
     TRUE ~ "Other"))
 
@@ -718,9 +671,7 @@ write_tsv(dge_res_table, "Results/DGE_malignant_vs_nonmalignant_cell_types_vs_re
 # just highlight the genes of interest for the final figure
 genes.label <- c("MKI67", "TOP2A", "CDH19", "SOX10", "PTPRZ1", "ERBB3", "PLP1",  "COL1A1", "MMP9", "MMP12", "TWIST1", "EZH2", "GPR139", "MARCO", "TERT")
 
-# TODO: highlight genes depending on which pathways they are in 
 # get the groups 
-
 gene_groups_df <- dge_res_table %>%
   select(Gene, genes_groups)
 
@@ -760,7 +711,6 @@ volcano_SDHx_rna <- ggVolcanoPlot(tt_all_genes_SDHx,
 
 ``` r
 # PANEL C-D: differential pathway expresssion
-
 tt_pathways_all_subtypes_not_C1A <- tt_pathways_all_subtypes_not_C1A %>% 
   rownames_to_column(var = "Gene") %>% 
     mutate(pathways_groups = case_when(
@@ -770,10 +720,6 @@ tt_pathways_all_subtypes_not_C1A <- tt_pathways_all_subtypes_not_C1A %>%
     grepl("ZETHOVEN_T_NK_cells|HALLMARK_IL2_STAT5_SIGNALING", Gene) ~ "T cells",
     grepl("ZETHOVEN_Fibroblasts", Gene) ~ "Fibroblasts",
     grepl("ZETHOVEN_Endothelial_cells", Gene) ~ "Endothelial cells",
-    # grepl("EPITHELIAL_MESENCHYMAL_TRANSITION", Gene) ~ "EMT",
-    # grepl("HALLMARK_KRAS_SIGNALING_UP|HALLMARK_KRAS_SIGNALING_DN", Gene) ~ "KRAS signalling",
-    # grepl("HALLMARK_APOPTOSIS", Gene) ~ "Apoptosis",
-    # grepl("hromaffin", Gene) ~ "Chromaffin cells",
     TRUE ~ "Other"))
 
 tt_pathways_SDHx <- tt_pathways_SDHx %>% 
@@ -784,10 +730,6 @@ tt_pathways_SDHx <- tt_pathways_SDHx %>%
     grepl("ZETHOVEN_T_NK_cells|HALLMARK_IL2_STAT5_SIGNALING", Gene) ~ "T cells",
     grepl("ZETHOVEN_Fibroblasts", Gene) ~ "Fibroblasts",
     grepl("ZETHOVEN_Endothelial_cells", Gene) ~ "Endothelial cells",
-    # grepl("EPITHELIAL_MESENCHYMAL_TRANSITION", Gene) ~ "EMT",
-    # grepl("HALLMARK_KRAS_SIGNALING_UP|HALLMARK_KRAS_SIGNALING_DN", Gene) ~ "KRAS signalling",
-    # grepl("HALLMARK_APOPTOSIS", Gene) ~ "Apoptosis",
-    # grepl("hromaffin", Gene) ~ "Chromaffin cells",
     TRUE ~ "Other"))
 
 volcano_all_subtypes_pathways <- ggVolcanoPlot(tt_pathways_all_subtypes_not_C1A,
@@ -824,6 +766,17 @@ ggsave(plot = all_volcanoes, filename = "Figures/volcanos_malignant_vs_benign.pd
        height = 20, width = 30, units = "cm")
 ```
 
+``` r
+# save supplemental table
+pathways.res.table <- tt_pathways_SDHx %>% mutate(comparison="malignant_vs_nonmalignant_in_C1A") %>%
+  bind_rows(tt_pathways_all_subtypes_not_C1A %>%
+              mutate(comparison="malignant_vs_nonmalignant_in_all_except_C1A")) %>% 
+  filter(adj.P.Val < 0.05) 
+
+pathways.res.table %>%
+  write_csv("Results/malignant_vs_benign_de_pathways.csv")
+```
+
 The top Malignant vs NonMalignant DEGs are dominated by cell-cycle
 related genes.
 
@@ -837,7 +790,8 @@ gene_df$genes_groups <- factor(gene_df$genes_groups,
 gene_df <- arrange(gene_df, genes_groups)
 
 # to reorder the dotplot columns 
-pcpg_rna$Cell_Type <- factor(pcpg_rna$Cell_Type, levels=names(cell.cols))
+pcpg_rna$Cell_Type <- factor(pcpg_rna$Cell_Type,
+                             levels=names(cell.cols))
 
 # make the heatmap
 dotplot1 = HeatmapDotPlot.Seurat(pcpg_rna,
@@ -860,12 +814,6 @@ dotplot1 = HeatmapDotPlot.Seurat(pcpg_rna,
                                 show_column_dend = FALSE,
                                 heatmap_legend_param  = hm_legend_params)
 
-dotplot1
-```
-
-![](bulk_dge_malignant_vs_benign_files/figure-gfm/dotplot-1.png)<!-- -->
-
-``` r
 # make the heatmap
 dotplot2 = HeatmapDotPlot.Seurat(subset(pcpg_rna, subset = Cell_Type == "Tumour"),
                                 assay = "SCT",
@@ -887,16 +835,11 @@ dotplot2 = HeatmapDotPlot.Seurat(subset(pcpg_rna, subset = Cell_Type == "Tumour"
                                 cluster_rows = FALSE,
                                 show_column_dend = FALSE,
                                 heatmap_legend_param  = hm_legend_params)
-dotplot2
-```
 
-![](bulk_dge_malignant_vs_benign_files/figure-gfm/dotplot-2.png)<!-- -->
-
-``` r
 draw(dotplot1 + dotplot2)
 ```
 
-![](bulk_dge_malignant_vs_benign_files/figure-gfm/dotplot-3.png)<!-- -->
+![](bulk_dge_malignant_vs_benign_files/figure-gfm/dotplot-1.png)<!-- -->
 
 ``` r
 pdf(file = "Figures/malignant_vs_benign_dotplot.pdf",
@@ -999,130 +942,6 @@ ggsave(plot = malignancy_genes_vln,
     ## Warning: Removed 162 rows containing non-finite values (stat_boxplot).
 
 ``` r
-# specify list of specific marker genes to plot in the violin plots
-
-# # pro-angiogenic cell type marker genes
-# angio_markers <- c("DLL4", "MCAM", "VEGFA", "EPAS1", "ANGPT2", "HEY1") # TODO: remove LEF1 later 
-# 
-# # immune cell type marker genes 
-# myeloid_markers <- c("CD68","CD86", "HLA-DRA", "CD163", "MARCO", "PLAU", "CXCL2")
-# lymphoid_markers <- c("CD4", "CD8A", "GNLY", "GZMB")
-# immune_markers <- c(myeloid_markers,   lymphoid_markers)
-# 
-# # glial markers
-# sclc_markers <- c("CDH19", "SOX10")
-# 
-# genes.of.interest <- c(angio_markers, myeloid_markers, lymphoid_markers, sclc_markers)
-```
-
-``` r
-# 
-# # angiogenic markers violin plots
-# angio_all_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#   split.by = "Malignancy",
-#   plot.title = "All subtypes",
-#   genelist = angio_markers, 
-#   col.pal = malignancy_cols) 
-# angio_SDHx_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#   genelist = angio_markers, 
-#   tumor_subtype_list = c("C1A1 (SDHx)"),
-#   split.by = "Malignancy",
-#   plot.title = "C1A1 (SDHx)",
-#   col.pal = malignancy_cols)  
-# 
-# angio_vln <- angio_all_malig_vln  + angio_SDHx_malig_vln 
-# 
-# angio_vln
-# 
-# angio_vln %>% 
-#   ggsave(height = 150, width = 300, units = "mm",
-#          filename = "Figures/malignancy_angio_markers_vln_stacked.pdf")
-```
-
-``` r
-# 
-# # myeloid markers violin plots
-# myeloid_all_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#   split.by = "Malignancy",
-#   plot.title = "All subtypes",
-#   genelist = myeloid_markers, 
-#   col.pal = malignancy_cols) 
-# 
-# myeloid_SDHx_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#   genelist = myeloid_markers, 
-#   tumor_subtype_list = c("C1A1 (SDHx)"),
-#   split.by = "Malignancy",
-#   plot.title = "C1A1 (SDHx)",
-#   col.pal = malignancy_cols)
-# 
-# myeloid_vln <- myeloid_all_malig_vln + myeloid_SDHx_malig_vln  
-# 
-# myeloid_vln
-# 
-# myeloid_vln %>%
-#   ggsave(height = 150, width = 300, units = "mm",
-#          filename = "Figures/malignancy_myelloid_markers_vln_stacked.pdf")
-```
-
-``` r
-# 
-# # lymphocyte markers violin plots
-# lymphoid_all_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#   split.by = "Malignancy",
-#   plot.title = "All subtypes",
-#   genelist = lymphoid_markers, 
-#   col.pal = malignancy_cols)
-# 
-# lymphoid_SDHx_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#   genelist = lymphoid_markers, 
-#   tumor_subtype_list = c("C1A1 (SDHx)"),
-#   split.by = "Malignancy",
-#   plot.title = "C1A1 (SDHx)",
-#   col.pal = malignancy_cols)
-# 
-# lymphoid_vln <- lymphoid_all_malig_vln + lymphoid_SDHx_malig_vln 
-# 
-# lymphoid_vln
-
-# 
-# lymphoid_vln %>%
-#   ggsave(height = 150, width = 300, units = "mm",
-#          filename = "Figures/malignancy_lymphoid_markers_vln_stacked.pdf")
-# 
-```
-
-``` r
-# 
-# # sclc markers violin plots
-# sclc_all_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#              split.by = "Malignancy",
-#   plot.title = "All subtypes",
-#              genelist = sclc_markers, 
-#              col.pal = malignancy_cols)
-# 
-# sclc_SDHx_malig_vln <- ggViolinPlot(
-#   plot_data = plot_data,
-#   genelist = sclc_markers, 
-#   tumor_subtype_list = c("C1A1 (SDHx)"),
-#              split.by = "Malignancy",
-#              col.pal = malignancy_cols)
-# 
-# sclc_vln <- sclc_all_malig_vln + sclc_SDHx_malig_vln 
-# sclc_vln
-
-# sclc_vln %>% 
-#   ggsave(height = 150, width = 300, units = "mm",
-#          filename = "Figures/malignancy_sclc_markers_vln_stacked.pdf")
-```
-
-``` r
 angio_genes <- c("VEGFA", "EPAS1", "FLT1", "DLL4", "HEY1", "ANGPT2", "MCAM", "PECAM1", "PDGFRB")
 
 tt_MAML3_vs_C2 <- compare.groups(fit.subtypes,
@@ -1144,4 +963,224 @@ tt_MAML3_vs_C2 <- tt_MAML3_vs_C2 %>%
   select(Gene, logFC, AveExpr, t, P.Value, adj.P.Val, B, Gene, Subtype)
 
 write_csv(tt_MAML3_vs_C2, "Results/MAML3_vs_C2_DGE.csv")
+
+tt_MAML3_vs_C2$significance <- case_when(
+  tt_MAML3_vs_C2$adj.P.Val < 0.001 ~ "***",
+  tt_MAML3_vs_C2$adj.P.Val < 0.01 ~ "**",
+  tt_MAML3_vs_C2$adj.P.Val < 0.05 ~ "*",
+  tt_MAML3_vs_C2$adj.P.Val > 0.05 ~ "nonsig")
+
+tt_MAML3_vs_C2 %>% view()
 ```
+
+``` r
+# run an ANOVA on the batch-normalised counts
+bulk_rna_all <- read_tsv("Data/bulk_expression_quantile_normalised.tsv") %>% dplyr::rename("Gene" = 1)
+```
+
+    ## New names:
+    ## * `` -> ...1
+
+    ## Rows: 23270 Columns: 736
+
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: "\t"
+    ## chr   (1): ...1
+    ## dbl (735): AGZ_001_U133_2, AGZ_002_U133_2, AGZ_003_U133_2, AGZ_004_U133_2, A...
+
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+# read in the bulk rna-seq metadata
+bulk_metadata_all <- read_csv("Data/bulk_metadata.tsv")
+```
+
+    ## Rows: 735 Columns: 24
+
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (19): Sample, Sample_raw, Alias, Accession_ID, Dataset, Batch, Location,...
+    ## dbl  (5): Purity, ConsensusCluster, Consensus, UMAP_1, UMAP_2
+
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+bulk_metadata_all$tumor_subtype <- factor(bulk_metadata_all$tumor_subtype,
+                                      levels = c(subtypes_genotypes))
+
+# remove head and necks, C2C, and NAM
+bulk_metadata_all <- bulk_metadata_all %>%
+  dplyr::filter(!tumor_subtype %in% c("C2C", "CCs (NAM)")) %>% 
+  dplyr::filter(!Location == "Head and neck") 
+
+bulk_rna_all <- bulk_rna_all %>%
+  dplyr::select(all_of(c("Gene", bulk_metadata_all$Sample_raw)))
+
+# put the counts in a matrix
+counts_mat_all <- bulk_rna_all %>% 
+  column_to_rownames(var = "Gene") %>%
+  as.matrix()
+
+# check that the metadata order and the counts matrix order line up
+table(colnames(counts_mat_all) == bulk_metadata_all$Sample_raw)
+```
+
+    ## 
+    ## TRUE 
+    ##  492
+
+``` r
+subtype2 <- make.names(bulk_metadata_all$tumor_subtype)
+batch2 <- bulk_metadata_all$Batch
+
+design.aov <- model.matrix(~0 + subtype2 + batch2)
+
+colnames(design.aov) <- str_remove(colnames(design.aov), "subtype2") %>%
+  str_replace("\\.\\.", "_") %>%
+  str_remove("\\.$") %>% 
+  str_replace("\\.", "_")
+
+fit.aov <- lmFit(counts_mat_all, design = design.aov)
+```
+
+    ## Warning: Partial NA coefficients for 10897 probe(s)
+
+``` r
+# make a contrast matrix comparing each subtype to C1A1
+# testing the null hypothesis that there is no differential expression between any of the subtypes
+# This style of analysis is discussed here on the bioconductor forum: 
+# https://support.bioconductor.org/p/76058/
+
+contrasts.aov <- makeContrasts(
+  C1A1_SDHx - C1A2_SDHx_HN,
+  C1A1_SDHx - C1B1_VHL,
+  C1A1_SDHx - C1B2_EPAS1,
+  C1A1_SDHx - C2A_Kinase,
+  C1A1_SDHx - C2B1_MAX,
+  C1A1_SDHx - C2B2_MAML3,
+  levels = colnames(design.aov))
+
+fit.aov <- contrasts.fit(fit.aov,
+                         contrasts = contrasts.aov)
+ebayes.aov <- eBayes(fit.aov)
+
+immune_genes <- c("CD68", "CD86", "HLA-DRA", "CD163", "MARCO", "PLAU", "CXCL2", "CD4", "CD8A", "GNLY", "GZMB")
+immune_anova <- topTable(fit = ebayes.aov[c(immune_genes, angio_genes),], coef = 1:6, number = Inf)
+write_csv(immune_anova, file = "Results/anova_style_analysis_bulk_rna_immune_genes.csv")
+```
+
+``` r
+sessionInfo()
+```
+
+    ## R version 4.0.4 (2021-02-15)
+    ## Platform: x86_64-pc-linux-gnu (64-bit)
+    ## Running under: Red Hat Enterprise Linux
+    ## 
+    ## Matrix products: default
+    ## BLAS/LAPACK: /usr/local/easybuild-2019/easybuild/software/compiler/gcc/10.2.0/openblas/0.3.12/lib/libopenblas_haswellp-r0.3.12.so
+    ## 
+    ## locale:
+    ##  [1] LC_CTYPE=en_AU.UTF-8       LC_NUMERIC=C              
+    ##  [3] LC_TIME=en_AU.UTF-8        LC_COLLATE=en_AU.UTF-8    
+    ##  [5] LC_MONETARY=en_AU.UTF-8    LC_MESSAGES=en_AU.UTF-8   
+    ##  [7] LC_PAPER=en_AU.UTF-8       LC_NAME=C                 
+    ##  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+    ## [11] LC_MEASUREMENT=en_AU.UTF-8 LC_IDENTIFICATION=C       
+    ## 
+    ## attached base packages:
+    ## [1] grid      stats     graphics  grDevices utils     datasets  methods  
+    ## [8] base     
+    ## 
+    ## other attached packages:
+    ##  [1] ggvenn_0.1.9         readxl_1.3.1         Seurat_3.2.3        
+    ##  [4] pals_1.7             ggrepel_0.9.1        ggsci_2.9           
+    ##  [7] GSVA_1.38.2          msigdbr_7.4.1        circlize_0.4.13     
+    ## [10] scales_1.1.1         RColorBrewer_1.1-2   ComplexHeatmap_2.6.2
+    ## [13] patchwork_1.1.1      forcats_0.5.1        stringr_1.4.0       
+    ## [16] dplyr_1.0.7          purrr_0.3.4          readr_2.0.0         
+    ## [19] tidyr_1.1.3          tibble_3.1.3         ggplot2_3.3.5       
+    ## [22] tidyverse_1.3.1      edgeR_3.32.1         limma_3.46.0        
+    ## 
+    ## loaded via a namespace (and not attached):
+    ##   [1] utf8_1.2.2                  reticulate_1.20            
+    ##   [3] tidyselect_1.1.1            RSQLite_2.2.7              
+    ##   [5] AnnotationDbi_1.52.0        htmlwidgets_1.5.3          
+    ##   [7] BiocParallel_1.24.1         Rtsne_0.15                 
+    ##   [9] munsell_0.5.0               codetools_0.2-18           
+    ##  [11] ica_1.0-2                   future_1.21.0              
+    ##  [13] miniUI_0.1.1.1              withr_2.4.2                
+    ##  [15] colorspace_2.0-2            Biobase_2.50.0             
+    ##  [17] highr_0.9                   knitr_1.33                 
+    ##  [19] rstudioapi_0.13             stats4_4.0.4               
+    ##  [21] ROCR_1.0-11                 tensor_1.5                 
+    ##  [23] listenv_0.8.0               labeling_0.4.2             
+    ##  [25] MatrixGenerics_1.2.1        GenomeInfoDbData_1.2.4     
+    ##  [27] polyclip_1.10-0             farver_2.1.0               
+    ##  [29] bit64_4.0.5                 parallelly_1.27.0          
+    ##  [31] vctrs_0.3.8                 generics_0.1.0             
+    ##  [33] xfun_0.24                   R6_2.5.0                   
+    ##  [35] GenomeInfoDb_1.26.7         clue_0.3-59                
+    ##  [37] rsvd_1.0.5                  locfit_1.5-9.4             
+    ##  [39] bitops_1.0-7                spatstat.utils_2.2-0       
+    ##  [41] cachem_1.0.5                DelayedArray_0.16.3        
+    ##  [43] assertthat_0.2.1            vroom_1.5.3                
+    ##  [45] promises_1.2.0.1            gtable_0.3.0               
+    ##  [47] Cairo_1.5-12.2              globals_0.14.0             
+    ##  [49] goftest_1.2-2               rlang_0.4.12               
+    ##  [51] GlobalOptions_0.1.2         splines_4.0.4              
+    ##  [53] lazyeval_0.2.2              dichromat_2.0-0            
+    ##  [55] broom_0.7.9                 yaml_2.2.1                 
+    ##  [57] reshape2_1.4.4              abind_1.4-5                
+    ##  [59] modelr_0.1.8                backports_1.2.1            
+    ##  [61] httpuv_1.6.1                tools_4.0.4                
+    ##  [63] ellipsis_0.3.2              BiocGenerics_0.36.1        
+    ##  [65] ggridges_0.5.3              Rcpp_1.0.7                 
+    ##  [67] plyr_1.8.6                  zlibbioc_1.36.0            
+    ##  [69] RCurl_1.98-1.3              rpart_4.1-15               
+    ##  [71] deldir_0.2-10               pbapply_1.4-3              
+    ##  [73] GetoptLong_1.0.5            cowplot_1.1.1              
+    ##  [75] S4Vectors_0.28.1            zoo_1.8-9                  
+    ##  [77] SummarizedExperiment_1.20.0 haven_2.4.1                
+    ##  [79] cluster_2.1.1               fs_1.5.0                   
+    ##  [81] magrittr_2.0.1              magick_2.7.3               
+    ##  [83] data.table_1.14.0           scattermore_0.7            
+    ##  [85] lmtest_0.9-38               reprex_2.0.0               
+    ##  [87] RANN_2.6.1                  fitdistrplus_1.1-5         
+    ##  [89] matrixStats_0.60.0          hms_1.1.0                  
+    ##  [91] mime_0.11                   evaluate_0.14              
+    ##  [93] xtable_1.8-4                XML_3.99-0.6               
+    ##  [95] IRanges_2.24.1              gridExtra_2.3              
+    ##  [97] shape_1.4.6                 compiler_4.0.4             
+    ##  [99] maps_3.3.0                  KernSmooth_2.23-18         
+    ## [101] crayon_1.4.1                htmltools_0.5.1.1          
+    ## [103] mgcv_1.8-34                 later_1.2.0                
+    ## [105] tzdb_0.1.2                  lubridate_1.7.10           
+    ## [107] DBI_1.1.1                   dbplyr_2.1.1               
+    ## [109] MASS_7.3-53.1               babelgene_21.4             
+    ## [111] Matrix_1.3-4                cli_3.0.1                  
+    ## [113] parallel_4.0.4              igraph_1.2.6               
+    ## [115] GenomicRanges_1.42.0        pkgconfig_2.0.3            
+    ## [117] plotly_4.9.4.1              xml2_1.3.2                 
+    ## [119] annotate_1.68.0             XVector_0.30.0             
+    ## [121] rvest_1.0.1                 digest_0.6.27              
+    ## [123] sctransform_0.3.2           RcppAnnoy_0.0.19           
+    ## [125] graph_1.68.0                spatstat.data_2.1-0        
+    ## [127] rmarkdown_2.9               cellranger_1.1.0           
+    ## [129] leiden_0.3.7                uwot_0.1.10                
+    ## [131] GSEABase_1.52.1             shiny_1.6.0                
+    ## [133] rjson_0.2.20                lifecycle_1.0.0            
+    ## [135] nlme_3.1-152                jsonlite_1.7.2             
+    ## [137] mapproj_1.2.7               viridisLite_0.4.0          
+    ## [139] fansi_0.5.0                 pillar_1.6.2               
+    ## [141] lattice_0.20-41             fastmap_1.1.0              
+    ## [143] httr_1.4.2                  survival_3.2-7             
+    ## [145] glue_1.4.2                  spatstat_1.64-1            
+    ## [147] png_0.1-7                   bit_4.0.4                  
+    ## [149] stringi_1.7.3               blob_1.2.2                 
+    ## [151] memoise_2.0.0               irlba_2.3.3                
+    ## [153] future.apply_1.7.0
