@@ -68,19 +68,30 @@ plotdata <- ihc %>%
   mutate(marker = factor(marker, levels = c("CD163+", "CD206+", "CD68+", "CD3+"))) %>% 
   mutate(Subtype = factor(Subtype, levels = intersect(subtypes_genotypes, unique(Subtype))))
 
-ggplot(plotdata, aes(x = Subtype, y = cells.per.2mm2, fill = Subtype)) +
-  geom_boxplot(outlier.shape=NA)+
-  geom_quasirandom(cex=1)+
-  facet_wrap(~marker,ncol = 1, scales = "free_y") + 
+ihc_box_plot <- ggplot(plotdata, aes(x = Subtype, y = cells.per.2mm2, fill = Subtype)) +
+  geom_boxplot(outlier.shape=NA, key_glyph="rect")+
+  geom_quasirandom(cex=1, show.legend = F)+
+  facet_wrap(~marker,ncol = 1, scales = "free_y", strip.position = "left") + 
   scale_fill_manual(values = subtype_genotype_cols)+
   labs(y = "Cells per 2mm2") +
+  scale_y_continuous(position = "right")+
+    scale_x_discrete(position = "top")+
     theme_bw() + 
   theme(strip.background = element_blank(),
-        axis.text.x = element_text(angle = 90, vjust=0.5, hjust=1),
-        panel.grid = element_blank())
+        axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0, ),
+        panel.grid = element_blank(),
+        legend.key=element_rect(fill=NA))
+ihc_box_plot
 ```
 
 ![](IHC_analysis_files/figure-gfm/boxplots-1.png)<!-- -->
+
+``` r
+ggsave(ihc_box_plot,
+       filename = "ihc_box_plot.pdf",
+       height = 10, width = 11, units = "in" ,
+       scale =0.5)
+```
 
 # ANOVA
 
